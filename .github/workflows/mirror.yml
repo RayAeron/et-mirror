@@ -1,0 +1,36 @@
+name: Mirror ET Open
+
+on:
+  schedule:
+    - cron: '23 1 * * *'   # каждый день в 01:23 UTC (04:23 МСК)
+  workflow_dispatch:        # кнопка ручного запуска
+
+permissions:
+  contents: write
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download ET Open and publish to branch "et"
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir out
+          for V in 8.0; do
+            D="out/suricata-$V"
+            B="https://rules.emergingthreats.net/open/suricata-$V"
+            mkdir -p "$D"
+            curl -fsSL --retry 3 -o "$D/emerging.rules.tar.gz" "$B/emerging.rules.tar.gz"
+            curl -fsSL --retry 3 -o "$D/version.txt"           "$B/version.txt"
+            curl -fsSL --retry 3 -o "$D/emerging.rules.tar.gz.md5" "$B/emerging.rules.tar.gz.md5" || true
+            tar -tzf "$D/emerging.rules.tar.gz" > /dev/null   # проверка, что архив целый
+          done
+          cd out
+          git init -q -b et
+          git config user.name  "et-mirror-bot"
+          git config user.email "et-mirror-bot@users.noreply.github.com"
+          git add -A
+          git commit -q -m "ET Open $(date -u +%F) v$(cat suricata-8.0/version.txt)"
+          git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" et
